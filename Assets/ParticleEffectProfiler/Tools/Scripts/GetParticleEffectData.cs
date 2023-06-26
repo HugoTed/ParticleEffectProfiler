@@ -26,12 +26,20 @@ public class GetParticleEffectData {
         {
             if (item.sharedMaterial)
             {
-                Texture texture = item.sharedMaterial.mainTexture;
-                if (texture && !textures.Contains(texture))
+                Shader shader = item.sharedMaterial.shader;
+                for (int i = 0; i < ShaderUtil.GetPropertyCount(shader); i++)
                 {
-                    textures.Add(texture);
-                    textureCount++;
-                    sumSize = sumSize + GetStorageMemorySize(texture);
+                    if (ShaderUtil.GetPropertyType(shader, i) == ShaderUtil.ShaderPropertyType.TexEnv)
+                    {
+                        string propertyName = ShaderUtil.GetPropertyName(shader, i);
+                        Texture texture = item.sharedMaterial.mainTexture;
+                        if (texture && !textures.Contains(texture))
+                        {
+                            textures.Add(texture);
+                            textureCount++;
+                            sumSize = sumSize + GetStorageMemorySize(texture);
+                        }
+                    }
                 }
             }
         }
