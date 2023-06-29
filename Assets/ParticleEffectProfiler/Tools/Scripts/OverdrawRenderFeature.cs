@@ -16,6 +16,8 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         public bool overdrawCompute = false;
 
         public RenderPassEvent passEvent = RenderPassEvent.AfterRenderingPostProcessing;
+
+        public Shader shader = null;
     }
 
     public OverdrawSetting overdrawSetting = new OverdrawSetting();
@@ -30,10 +32,11 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         private int[] resultData = new int[dataSize];
         private ComputeBuffer resultBuffer;
         private Shader replacementShader;
+        Material material;
 
-        //int overdrawTexture;
+        int overdrawTexture;
 
-        RenderTexture overdrawTexture;
+        RenderTexture overdrawTexture2;
 
         // ========= Results ========
         // Last measurement
@@ -55,8 +58,22 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         private float accumulatedIntervalOverdraw;
         private long intervalFrames;
 
+        private FilteringSettings filteringSettings;
+        private List<ShaderTagId> tagIdList = new List<ShaderTagId>();
+
+        RenderTextureDescriptor desc;
+
+        long MaxShadedFragments = long.MinValue;
+
         public OverdrawPass(OverdrawSetting setting)
         {
+            tagIdList.Add(new ShaderTagId("UniversalForward"));
+            tagIdList.Add(new ShaderTagId("LightweightForward"));
+            tagIdList.Add(new ShaderTagId("SRPDefaultUnlit"));
+            filteringSettings = new FilteringSettings(RenderQueueRange.transparent, LayerMask.NameToLayer("Everything"));
+
+            material = CoreUtils.CreateEngineMaterial(setting.shader);
+
             m_ComputeShader = setting.overdrawCS;
             m_Compute = setting.overdrawCompute;
             RecreateComputeBuffer();
@@ -69,6 +86,17 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         }
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
         {
+            overdrawTexture = Shader.PropertyToID("_OverdrawTexture");
+            desc = renderingData.cameraData.cameraTargetDescriptor;
+            desc.colorFormat = RenderTextureFormat.RFloat;
+            //desc.enableRandomWrite = true;
+            desc.width = 1024;
+            desc.height = 1024;
+            //overdrawTexture2 = RenderTexture.GetTemporary(desc);
+            cmd.GetTemporaryRT(overdrawTexture, desc);
+
+            ConfigureClear(ClearFlag.All, Color.black);
+            ConfigureTarget(overdrawTexture);
         }
 
         private void RecreateComputeBuffer()
@@ -83,35 +111,36 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
             if (m_Compute && m_ComputeShader != null)
             {
                 CommandBuffer cmd = CommandBufferPool.Get("Check OverDraw");
-                //overdrawTexture = Shader.PropertyToID("_OverdrawTexture");
-                var desc = renderingData.cameraData.cameraTargetDescriptor;
-                desc.colorFormat = RenderTextureFormat.RFloat;
-                desc.enableRandomWrite = true;
 
-                overdrawTexture = RenderTexture.GetTemporary(desc);
-                //cmd.GetTemporaryRT(overdrawTexture, desc);
+                
 
-                cmd.Blit(src,overdrawTexture);
+                var sortFlags = SortingCriteria.CommonTransparent;
+                var drawSettings = CreateDrawingSettings(tagIdList, ref renderingData, sortFlags);
+                drawSettings.overrideMaterial = material;
+                context.DrawRenderers(renderingData.cullResults, ref drawSettings, ref filteringSettings);
+
+                //cmd.Blit(overdrawTexture,src);
 
                 int kernel = m_ComputeShader.FindKernel("CSMain");
 
                 RecreateComputeBuffer();
 
-                // Setting up the data
-                resultBuffer.SetData(inputData);
-                m_ComputeShader.SetTexture(kernel, "Overdraw", overdrawTexture);
-                m_ComputeShader.SetBuffer(kernel, "Output", resultBuffer);
-
-                //cmd.SetComputeBufferData(resultBuffer, inputData);
-                //cmd.SetComputeTextureParam(m_ComputeShader, kernel, "Overdraw", overdrawTexture);
-                //cmd.SetComputeBufferParam(m_ComputeShader, kernel, "Output", resultBuffer);
-
                 int xGroups = (desc.width / 32);
                 int yGroups = (desc.height / 32);
 
+                // Setting up the data
+                //resultBuffer.SetData(inputData);
+                //m_ComputeShader.SetTexture(kernel, "Overdraw", overdrawTexture2);
+                //m_ComputeShader.SetBuffer(kernel, "Output", resultBuffer);
+                //m_ComputeShader.Dispatch(kernel, xGroups, yGroups, 1);
+
+                cmd.SetComputeBufferData(resultBuffer, inputData);
+                cmd.SetComputeTextureParam(m_ComputeShader, kernel, "Overdraw", overdrawTexture);
+                cmd.SetComputeBufferParam(m_ComputeShader, kernel, "Output", resultBuffer);
+                cmd.DispatchCompute(m_ComputeShader, kernel, xGroups, yGroups, 1);
+
+
                 // Summing up the fragments
-                m_ComputeShader.Dispatch(kernel, xGroups, yGroups, 1);
-                //cmd.DispatchCompute(m_ComputeShader, kernel, xGroups, yGroups, 1);
                 resultBuffer.GetData(resultData);
 
                 // Getting the results
@@ -123,7 +152,13 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
                 OverdrawRatio = (float)TotalShadedFragments / (xGroups * 32 * yGroups * 32);
 
-                Debug.Log(OverdrawRatio);
+                accumulatedIntervalFragments += TotalShadedFragments;
+                accumulatedIntervalOverdraw += OverdrawRatio;
+                intervalFrames++;
+
+                MaxShadedFragments = (MaxShadedFragments > TotalShadedFragments) ? MaxShadedFragments : TotalShadedFragments;
+                Debug.Log(MaxShadedFragments);
+
                 context.ExecuteCommandBuffer(cmd);
                 CommandBufferPool.Release(cmd);
             }
@@ -132,8 +167,8 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         public override void OnCameraCleanup(CommandBuffer cmd)
         {
             //resultBuffer?.Release();
-            //cmd.ReleaseTemporaryRT(overdrawTexture);
-            RenderTexture.ReleaseTemporary(overdrawTexture);
+            cmd.ReleaseTemporaryRT(overdrawTexture);
+            //RenderTexture.ReleaseTemporary(overdrawTexture2);
         }
     }
 
@@ -148,8 +183,12 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        m_ScriptablePass.Setup(renderer.cameraColorTarget);
-        renderer.EnqueuePass(m_ScriptablePass);
+        if(!renderingData.cameraData.isSceneViewCamera)
+        {
+            m_ScriptablePass.Setup(renderer.cameraColorTarget);
+            renderer.EnqueuePass(m_ScriptablePass);
+        }
+        
     }
 }
 
