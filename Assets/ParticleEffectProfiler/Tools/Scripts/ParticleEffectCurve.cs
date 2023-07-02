@@ -17,6 +17,8 @@ public class ParticleEffectCurve {
 
     List<int> m_Values = new List<int>();
 
+    List<float> m_Values_Float = new List<float>();
+
     public AnimationCurve UpdateAnimationCurve(int value, bool loop, int second)
     {
         m_ValueCount = second * FPS;
@@ -49,6 +51,51 @@ public class ParticleEffectCurve {
                     animationCurve.RemoveKey(i);
                 }
                 animationCurve.AddKey(i, m_Values[i]);
+            }
+        }
+        else
+        {
+            if (animationCurve.length < m_ValueCount)
+            {
+                animationCurve.AddKey(animationCurve.length, value);
+            }
+        }
+
+        return animationCurve;
+    }
+
+    public AnimationCurve UpdateAnimationCurve(float value, bool loop, int second)
+    {
+        m_ValueCount = second * FPS;
+
+        if (animationCurve.length > m_ValueCount)
+        {
+            for (int i = animationCurve.length - 1; i >= m_ValueCount; i--)
+            {
+                Debug.Log(i);
+                animationCurve.RemoveKey(i);
+                if (i <= m_Values_Float.Count)
+                {
+                    m_Values_Float.RemoveAt(i);
+                }
+            }
+        }
+
+        if (loop)
+        {
+            if (m_Values_Float.Count >= m_ValueCount)
+            {
+                m_Values_Float.RemoveAt(0);
+            }
+
+            m_Values_Float.Add(value);
+            for (int i = 0; i < m_Values_Float.Count; i++)
+            {
+                if (animationCurve.length > i)
+                {
+                    animationCurve.RemoveKey(i);
+                }
+                animationCurve.AddKey(i, m_Values_Float[i]);
             }
         }
         else

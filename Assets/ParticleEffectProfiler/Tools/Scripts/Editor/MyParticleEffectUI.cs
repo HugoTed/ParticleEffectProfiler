@@ -21,10 +21,12 @@ public class MyParticleEffectUI : Editor {
         if (EditorApplication.isPlaying)
         {
             m_Label[++index] = GetParticleEffectData.GetOnlyParticleEffecDrawCallStr();
+            m_Label[++index] = GetParticleEffectData.GetOnlyParticleEffecSetPassCallStr();
             m_Label[++index] = GetParticleEffectData.GetParticleCountStr(particleEffectScript);
             m_Label[++index] = GetParticleEffectData.GetPixDrawAverageStr(particleEffectScript);
-            m_Label[++index] = GetParticleEffectData.GetPixActualDrawAverageStr(particleEffectScript);
+            //m_Label[++index] = GetParticleEffectData.GetPixActualDrawAverageStr(particleEffectScript);
             m_Label[++index] = GetParticleEffectData.GetPixRateStr(particleEffectScript);
+            m_Label[++index] = GetParticleEffectData.GetMaxOverdrawRatioStr();
         }
 
         ShowUI(); 

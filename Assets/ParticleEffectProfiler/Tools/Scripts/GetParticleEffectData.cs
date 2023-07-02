@@ -6,6 +6,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Profiling;
+using static OverdrawRenderFeature;
 
 /// <summary>
 /// 处理特效整体相关的数据
@@ -13,6 +14,7 @@ using UnityEngine.Profiling;
 public class GetParticleEffectData {
 
     static int m_MaxDrawCall = 0;
+    static int m_MaxSetPassCall = 0;
 
     public static int GetRuntimeMemorySize(GameObject go, out int textureCount)
     {
@@ -94,10 +96,27 @@ public class GetParticleEffectData {
         return drawCall;
     }
 
+    public static int GetOnlyParticleEffecSetPassCall()
+    {
+        int setPassCall = UnityEditor.UnityStats.setPassCalls / 2;
+        if (m_MaxSetPassCall < setPassCall)
+        {
+            m_MaxSetPassCall = setPassCall;
+        }
+        return setPassCall;
+
+    }
+
     public static string GetOnlyParticleEffecDrawCallStr()
     {
         int max = 10;
         return string.Format("DrawCall: {0}   最高：{1}   建议：<{2}", FormatColorMax(GetOnlyParticleEffecDrawCall(), max), FormatColorMax(m_MaxDrawCall, max), max);
+    }
+
+    public static string GetOnlyParticleEffecSetPassCallStr()
+    {
+        int max = 10;
+        return string.Format("Set Pass Call: {0}   最高：{1}   建议：<{2}", FormatColorMax(GetOnlyParticleEffecSetPassCall(), max), FormatColorMax(m_MaxSetPassCall, max), max);
     }
 
     public static string GetPixDrawAverageStr(ParticleEffectScript particleEffectGo)
@@ -105,7 +124,7 @@ public class GetParticleEffectData {
         //index = 0：默认按高品质的算，这里你可以根本你们项目的品质进行修改。
         EffectEvlaData[] effectEvlaData = particleEffectGo.GetEffectEvlaData();
         int pixDrawAverage = effectEvlaData[0].GetPixDrawAverage();
-        return string.Format("特效原填充像素点：{0}", FormatColorValue(pixDrawAverage));
+        return string.Format("特效原填充像素点：{0}", FormatColorValue((int)OverdrawPass.accumulatedIntervalFragments));
     }
 
     public static string GetPixActualDrawAverageStr(ParticleEffectScript particleEffectGo)
@@ -117,10 +136,16 @@ public class GetParticleEffectData {
 
     public static string GetPixRateStr(ParticleEffectScript particleEffectGo)
     {
-        int max = 4;
+        int max = 2;
         EffectEvlaData[] effectEvlaData = particleEffectGo.GetEffectEvlaData();
         int pixRate = effectEvlaData[0].GetPixRate();
-        return string.Format("平均每像素overdraw率：{0}   建议：<{1}", FormatColorMax(pixRate, max), max);
+        return string.Format("平均每像素overdraw率：{0}   建议：<{1}", FormatColorMax(OverdrawPass.AccumulatedAverageOverdraw, max), max);
+    }
+
+    public static string GetMaxOverdrawRatioStr()
+    {
+        int max = 3;
+        return string.Format("最大每像素overdraw率：{0}   建议：<{1}", FormatColorMax(OverdrawPass.MaxOverdrawRatio, max), max);
     }
 
     public static string GetParticleCountStr(ParticleEffectScript particleEffectGo)
@@ -301,6 +326,14 @@ public class GetParticleEffectData {
     }
 
     static string FormatColorMax(int value, int max)
+    {
+        if (max > value)
+            return string.Format("<color=green>{0}</color>", value);
+        else
+            return string.Format("<color=red>{0}</color>", value);
+    }
+
+    static string FormatColorMax(float value, float max)
     {
         if (max > value)
             return string.Format("<color=green>{0}</color>", value);

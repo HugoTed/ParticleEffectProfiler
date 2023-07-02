@@ -10,10 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: de640fe3d0db1804a85f9fc8f5cadab6, type: 3}
-  m_Name: UniversalRenderPipelineAsset_Renderer
+  m_Name: OverDrawRenderer
   m_EditorClassIdentifier: 
-  m_RendererFeatures: []
-  m_RendererFeatureMap: 
+  m_RendererFeatures:
+  - {fileID: 8819176288659801128}
+  - {fileID: 8752960574824034356}
+  m_RendererFeatureMap: 28841dc91b02647a34b0628344c37879
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   xrSystemData: {fileID: 11400000, guid: 60e1133243b97e347b653163a8c01b64, type: 2}
   shaders:
@@ -43,3 +45,37 @@ MonoBehaviour:
   m_ShadowTransparentReceive: 1
   m_RenderingMode: 0
   m_AccurateGbufferNormals: 0
+--- !u!114 &8752960574824034356
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 426fed0328c52544fb803e8c76635aee, type: 3}
+  m_Name: OverdrawWatcherPassFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  overdrawWatcherSetting:
+    passEvent: 600
+    shader: {fileID: 4800000, guid: 652caa153f81adf4093708ef5964e91f, type: 3}
+--- !u!114 &8819176288659801128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59cf649eeaf09e84a83fe97d94deef72, type: 3}
+  m_Name: OverdrawRenderChecker
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  overdrawSetting:
+    overdrawCS: {fileID: 7200000, guid: b729a65346967ec40b9aedcbf962858f, type: 3}
+    overdrawCompute: 1
+    passEvent: 500
+    shader: {fileID: 4800000, guid: 92f2c62ca4595e345b8e0f46d1b45f4d, type: 3}

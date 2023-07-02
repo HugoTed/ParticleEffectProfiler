@@ -13,6 +13,7 @@ Shader "Debug/OverdrawInt"
 
 			Pass
 			{
+				Tags{"LightMode" = "UniversalForward"}
 				Cull[HARDWARE_CullMode]
 				ZWrite[HARDWARE_ZWrite]
 				Blend One One

@@ -52,7 +52,7 @@ Category {
         }
         
 		Pass {
-		
+			//Tags{"LightMode"="UniversalForward"}
 			CGPROGRAM
 			#pragma exclude_renderers ps3 xbox360 flash xboxone ps4 psp2
             #pragma fragmentoption ARB_precision_hint_fastest

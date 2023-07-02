@@ -21,11 +21,13 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
     }
 
     public OverdrawSetting overdrawSetting = new OverdrawSetting();
-    class OverdrawPass : ScriptableRenderPass
+
+    ComputeBuffer resultBuffer;
+    public class OverdrawPass : ScriptableRenderPass
     {
         ComputeShader m_ComputeShader;
         bool m_Compute = false;
-        RenderTargetIdentifier src,m_Rt;
+        RenderTargetIdentifier src;
 
         private const int dataSize = 128 * 128;
         private int[] inputData = new int[dataSize];
@@ -36,14 +38,12 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
         int overdrawTexture;
 
-        RenderTexture overdrawTexture2;
-
         // ========= Results ========
         // Last measurement
         /// <summary> The number of shaded fragments in the last frame. </summary>
-        public long TotalShadedFragments { get; private set; }
+        public static int TotalShadedFragments { get; private set; }
         /// <summary> The overdraw ration in the last frame. </summary>
-        public float OverdrawRatio { get; private set; }
+        public static float OverdrawRatio { get; private set; }
 
         // Sampled measurement
         /// <summary> Number of shaded fragments in the measured time span. </summary>
@@ -52,21 +52,23 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
         public float IntervalAverageShadedFragments { get; private set; }
         /// <summary> The average overdraw in the measured time span. </summary>
         public float IntervalAverageOverdraw { get; private set; }
-        public float AccumulatedAverageOverdraw { get { return accumulatedIntervalOverdraw / intervalFrames; } }
+        public static float AccumulatedAverageOverdraw { get { return accumulatedIntervalOverdraw / intervalFrames; } }
 
-        private long accumulatedIntervalFragments;
-        private float accumulatedIntervalOverdraw;
-        private long intervalFrames;
+        public static long accumulatedIntervalFragments;
+        private static float accumulatedIntervalOverdraw;
+        private static long intervalFrames;
 
         private FilteringSettings filteringSettings;
         private List<ShaderTagId> tagIdList = new List<ShaderTagId>();
 
         RenderTextureDescriptor desc;
 
-        long MaxShadedFragments = long.MinValue;
+        int MaxShadedFragments = 0;
+        public static float MaxOverdrawRatio = 0;
 
-        public OverdrawPass(OverdrawSetting setting)
+        public OverdrawPass(OverdrawSetting setting,ref ComputeBuffer buffer)
         {
+            resultBuffer = buffer;
             tagIdList.Add(new ShaderTagId("UniversalForward"));
             tagIdList.Add(new ShaderTagId("LightweightForward"));
             tagIdList.Add(new ShaderTagId("SRPDefaultUnlit"));
@@ -78,6 +80,7 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
             m_Compute = setting.overdrawCompute;
             RecreateComputeBuffer();
             for (int i = 0; i < inputData.Length; i++) inputData[i] = 0;
+            for (int i = 0; i < resultData.Length; i++) resultData[i] = 0;
         }
 
         public void Setup(RenderTargetIdentifier source)
@@ -89,10 +92,10 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
             overdrawTexture = Shader.PropertyToID("_OverdrawTexture");
             desc = renderingData.cameraData.cameraTargetDescriptor;
             desc.colorFormat = RenderTextureFormat.RFloat;
+            desc.depthBufferBits = 0;
             //desc.enableRandomWrite = true;
-            desc.width = 1024;
-            desc.height = 1024;
-            //overdrawTexture2 = RenderTexture.GetTemporary(desc);
+            //desc.width = 1024;
+            //desc.height = 1024;
             cmd.GetTemporaryRT(overdrawTexture, desc);
 
             ConfigureClear(ClearFlag.All, Color.black);
@@ -107,12 +110,10 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-
+            //Debug.Log(m_Compute);
             if (m_Compute && m_ComputeShader != null)
             {
                 CommandBuffer cmd = CommandBufferPool.Get("Check OverDraw");
-
-                
 
                 var sortFlags = SortingCriteria.CommonTransparent;
                 var drawSettings = CreateDrawingSettings(tagIdList, ref renderingData, sortFlags);
@@ -123,7 +124,7 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
                 int kernel = m_ComputeShader.FindKernel("CSMain");
 
-                RecreateComputeBuffer();
+                //RecreateComputeBuffer();
 
                 int xGroups = (desc.width / 32);
                 int yGroups = (desc.height / 32);
@@ -143,6 +144,9 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
                 // Summing up the fragments
                 resultBuffer.GetData(resultData);
 
+                context.ExecuteCommandBuffer(cmd);
+                CommandBufferPool.Release(cmd);
+
                 // Getting the results
                 TotalShadedFragments = 0;
                 for (int i = 0; i < resultData.Length; i++)
@@ -152,23 +156,39 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
                 OverdrawRatio = (float)TotalShadedFragments / (xGroups * 32 * yGroups * 32);
 
+                if (OverdrawRatio <= 0 && TotalShadedFragments <= 0)
+                {
+                    return;
+                }
+
                 accumulatedIntervalFragments += TotalShadedFragments;
                 accumulatedIntervalOverdraw += OverdrawRatio;
+
                 intervalFrames++;
 
-                MaxShadedFragments = (MaxShadedFragments > TotalShadedFragments) ? MaxShadedFragments : TotalShadedFragments;
-                Debug.Log(MaxShadedFragments);
 
-                context.ExecuteCommandBuffer(cmd);
-                CommandBufferPool.Release(cmd);
+                MaxShadedFragments = (MaxShadedFragments > TotalShadedFragments) ? MaxShadedFragments : TotalShadedFragments;
+                MaxOverdrawRatio = (MaxOverdrawRatio > OverdrawRatio) ? MaxOverdrawRatio : OverdrawRatio;
+                
+                //Debug.Log(MaxOverdrawRatio);
+
+                
+            }
+            else
+            {
+                //MaxShadedFragments = 0;
+                //accumulatedIntervalFragments = 0;
+                //accumulatedIntervalOverdraw = 0;
+                //intervalFrames = 0;
+                //OverdrawRatio = 0;
+
+                resultBuffer?.Release();
             }
         }
 
         public override void OnCameraCleanup(CommandBuffer cmd)
         {
-            //resultBuffer?.Release();
             cmd.ReleaseTemporaryRT(overdrawTexture);
-            //RenderTexture.ReleaseTemporary(overdrawTexture2);
         }
     }
 
@@ -176,19 +196,24 @@ public class OverdrawRenderFeature : ScriptableRendererFeature
 
     public override void Create()
     {
-        m_ScriptablePass = new OverdrawPass(overdrawSetting);
+        m_ScriptablePass = new OverdrawPass(overdrawSetting, ref resultBuffer);
 
         m_ScriptablePass.renderPassEvent = overdrawSetting.passEvent;
     }
 
     public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
     {
-        if(!renderingData.cameraData.isSceneViewCamera)
+        if (!renderingData.cameraData.isSceneViewCamera)
         {
             m_ScriptablePass.Setup(renderer.cameraColorTarget);
             renderer.EnqueuePass(m_ScriptablePass);
         }
-        
+
+    }
+
+    public void OnDisable()
+    {
+        resultBuffer?.Release();
     }
 }
 

@@ -46,8 +46,8 @@ public class EffectEvla
 
     public void Update()
     {
-        time += Time.deltaTime;
-        RecordOverDrawData(singleEffectEvla);
+        //time += Time.deltaTime;
+        //RecordOverDrawData(singleEffectEvla);
     }
 
     public EffectEvlaData[] GetEffectEvlaData()

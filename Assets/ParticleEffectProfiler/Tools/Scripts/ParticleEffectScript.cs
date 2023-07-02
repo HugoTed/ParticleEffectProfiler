@@ -4,8 +4,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.Rendering.LookDev;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using static OverdrawRenderFeature;
 
 /// <summary>
 /// 特效性能分析工具的管理类
@@ -31,6 +35,8 @@ public class ParticleEffectScript : MonoBehaviour {
     ParticleEffectCurve m_CurveDrawCallCount;
     ParticleEffectCurve m_CurveOverdraw;
 
+    float sampleTime = 0;
+
 
     void Awake()
     {
@@ -41,6 +47,10 @@ public class ParticleEffectScript : MonoBehaviour {
         m_CurveDrawCallCount = new ParticleEffectCurve();
         m_CurveOverdraw = new ParticleEffectCurve();
         m_EffectEvla = new EffectEvla(Camera.main);
+
+        UniversalAdditionalCameraData additionalCameraData = Camera.main.GetComponent<UniversalAdditionalCameraData>();
+
+        additionalCameraData.SetRenderer(1);
     }
 
     void Start()
@@ -55,12 +65,24 @@ public class ParticleEffectScript : MonoBehaviour {
 
     private void LateUpdate()
     {
-        RecordParticleCoun();
-        m_EffectEvla.Update();
+        sampleTime++;
+        //if (sampleTime < 特效运行时间 * ParticleEffectCurve.FPS)
+        {
+            RecordParticleCoun();
+            m_EffectEvla.Update();
 
-        UpdateParticleCountCurve();
-        UpdateDrawCallCurve();
-        UpdateOverdrawCurve();
+            UpdateParticleCountCurve();
+            UpdateDrawCallCurve();
+            UpdateOverdrawCurve();
+        }
+        //else
+        {
+            //OverdrawPass.m_Compute = false;
+        }
+        
+        
+
+        
     }
 
     public EffectEvlaData[] GetEffectEvlaData()
@@ -113,7 +135,8 @@ public class ParticleEffectScript : MonoBehaviour {
     void UpdateOverdrawCurve()
     {
         EffectEvlaData[] effectEvlaData = this.GetEffectEvlaData();
-        Overdraw = m_CurveOverdraw.UpdateAnimationCurve(effectEvlaData[0].GetPixRate(), 循环, 特效运行时间);
+        //Overdraw = m_CurveOverdraw.UpdateAnimationCurve(effectEvlaData[0].GetPixRate(), 循环, 特效运行时间);
+        Overdraw = m_CurveOverdraw.UpdateAnimationCurve(OverdrawPass.OverdrawRatio, 循环, 特效运行时间);
     }
 
 	//监听apply事件
